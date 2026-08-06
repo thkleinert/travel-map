@@ -245,7 +245,7 @@ A trip is one GeoJSON file in `data/routes/` plus one object in `data/trips.js`
 to your dataset as soon as that file exists. (The demo dataset is the same two
 things under `demo/` — a handy template, and `demo/stops/*.json` shows what the
 stop lists below look like.) Pick whichever
-route in suits you:
+route suits you:
 
 **a. From a list of places** — the usual path. Write the stops in travel order:
 
