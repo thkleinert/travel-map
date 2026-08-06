@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "travels-dev",
+      "runtimeExecutable": "node_modules/.bin/vite",
+      "runtimeArgs": [],
+      "port": 5174,
+      "autoPort": true
+    }
+  ]
+}

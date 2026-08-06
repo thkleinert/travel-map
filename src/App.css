@@ -1,0 +1,746 @@
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: dark;
+
+  /* One source of truth for the stack — Leaflet sets its own font-family on
+     .leaflet-container, so anything rendered inside the map (tooltips) has to
+     restate it rather than inherit. */
+  --font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --body-bg:          #0D1117;
+  --map-bg:           #0D1117;
+  --panel-bg:         rgba(13,17,23,0.93);
+  --panel-border:     rgba(255,255,255,0.07);
+  --panel-sep:        rgba(255,255,255,0.05);
+  --panel-shadow:     none;
+
+  /* text-3 → text-5 carry real content (countries, dates, distances, stat
+     labels), so they are held at or above WCAG AA 4.5:1 on --panel-bg rather
+     than fading out into it. */
+  --text-1:  #F0F6FC;
+  --text-2:  #C9D1D9;
+  --text-3:  #A6B0BB;
+  --text-4:  #8B949E;
+  --text-5:  #7D8590;
+
+  --fbtn-border:         rgba(255,255,255,0.08);
+  --fbtn-color:          #8B949E;
+  --fbtn-hover-border:   rgba(255,255,255,0.18);
+  --fbtn-hover-color:    #C9D1D9;
+  --fbtn-active-bg:      rgba(79,168,255,0.12);
+  --fbtn-active-border:  rgba(79,168,255,0.35);
+  --fbtn-active-color:   #4FA8FF;
+
+  --jrow-hover:          rgba(255,255,255,0.025);
+
+  --dbar-border:         rgba(79,168,255,0.18);
+  --dstat:               #4FA8FF;
+
+  --mkr-home:            rgba(240,246,252,0.8);
+  --mkr-home-bg:         rgba(240,246,252,0.18);
+}
+
+:root.light {
+  color-scheme: light;
+
+  --body-bg:          #F6F8FA;
+  --map-bg:           #E8EBF0;
+  --panel-bg:         rgba(255,255,255,0.96);
+  --panel-border:     rgba(0,0,0,0.08);
+  --panel-sep:        rgba(0,0,0,0.06);
+  --panel-shadow:     0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.06);
+
+  --text-1:  #1C2128;
+  --text-2:  #24292F;
+  --text-3:  #57606A;
+  --text-4:  #6E7781;
+  --text-5:  #6E7781;
+
+  --fbtn-border:         rgba(0,0,0,0.10);
+  --fbtn-color:          #57606A;
+  --fbtn-hover-border:   rgba(0,0,0,0.20);
+  --fbtn-hover-color:    #24292F;
+  --fbtn-active-bg:      rgba(29,111,216,0.09);
+  --fbtn-active-border:  rgba(29,111,216,0.35);
+  --fbtn-active-color:   #1D6FD8;
+
+  --jrow-hover:          rgba(0,0,0,0.025);
+
+  --dbar-border:         rgba(29,111,216,0.18);
+  --dstat:               #1D6FD8;
+
+  --mkr-home:            rgba(28,33,40,0.65);
+  --mkr-home-bg:         rgba(28,33,40,0.12);
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font);
+  background: var(--body-bg);
+  color: var(--text-2);
+  transition: background-color 0.25s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, input, select { -webkit-tap-highlight-color: transparent; }
+
+/* Visible to screen readers and search engines, not on screen */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* One consistent focus ring everywhere, instead of a mix of UA rings, faint
+   1px borders and nothing at all. */
+:where(button, input, select, a):focus-visible {
+  outline: 2px solid var(--fbtn-active-color);
+  outline-offset: 1px;
+}
+
+/* ── App shell ──────────────────────────────────────────────────────────── */
+
+.app {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  /* iOS Safari's 100vh excludes the collapsible toolbars, so the map would
+     extend behind them and everything centred in it would sit too low */
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ── Map ────────────────────────────────────────────────────────────────── */
+
+.map-container {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--map-bg);
+  transition: background-color 0.25s ease;
+}
+
+.map-container .leaflet-container {
+  position: absolute;
+  inset: 0;
+  background: var(--map-bg);
+  transition: background-color 0.25s ease;
+}
+
+/* Attribution is required by OSM / CARTO / Esri tile terms — keep it quiet but
+   actually readable, including over satellite imagery, where a transparent
+   background left it with no contrast floor at all. Zoom control is disabled
+   via the MapContainer prop instead. */
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: var(--panel-bg) !important;
+  color: var(--text-3);
+  padding: 1px 6px !important;
+  border-radius: 5px 0 0 0;
+}
+.leaflet-control-attribution a { color: inherit !important; }
+
+/* The control sits inside the map's stacking context, so the floating panels
+   always paint over it. `--ui-bottom` is the height of whatever occupies the
+   bottom edge (the mobile sheet); lift the attribution clear of it. */
+.map-container .leaflet-bottom.leaflet-right {
+  bottom: calc(var(--ui-bottom, 0px) + env(safe-area-inset-bottom, 0px));
+  right: env(safe-area-inset-right, 0px);
+  transition: bottom 0.25s ease;
+}
+
+/* Stop-name tooltips (per-stop hover; falls back to the trip name) */
+.leaflet-tooltip.stop-tip {
+  font-family: var(--font);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-2);
+  box-shadow: var(--panel-shadow);
+}
+.leaflet-tooltip.stop-tip::before { display: none; }
+
+/* ── Floating map controls (top right) ───────────────────────────────────── */
+
+.map-controls {
+  position: absolute;
+  /* the viewport is viewport-fit=cover so the map runs edge to edge — the
+     controls themselves still have to clear the notch / rounded corners */
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  z-index: 30;
+  display: flex;
+  gap: 8px;
+}
+
+/* anchors the style popover below just this button, not the whole row */
+.style-menu {
+  position: relative;
+}
+
+.style-menu-toggle,
+.visited-toggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--panel-shadow);
+  transition: border-color 0.13s, color 0.13s, background-color 0.2s ease;
+}
+.style-menu-toggle:hover,
+.visited-toggle:hover {
+  border-color: var(--fbtn-hover-border);
+  color: var(--fbtn-hover-color);
+}
+.style-menu-toggle.active,
+.visited-toggle.active {
+  color: var(--fbtn-active-color);
+  border-color: var(--fbtn-active-border);
+  background: var(--fbtn-active-bg);
+}
+.style-menu-toggle svg,
+.visited-toggle svg { display: block; }
+
+.style-menu-popover {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  width: 132px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: var(--panel-shadow);
+}
+
+.style-menu-item {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 7px 10px;
+  border-radius: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--fbtn-color);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.style-menu-item:hover { background: var(--jrow-hover); color: var(--fbtn-hover-color); }
+.style-menu-item.active { background: var(--fbtn-active-bg); color: var(--fbtn-active-color); }
+
+/* mobile-only journeys list toggle (floating, top left) */
+.mobile-list-toggle {
+  display: none;
+  position: absolute;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  z-index: 30;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 12px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--fbtn-color);
+  cursor: pointer;
+  box-shadow: var(--panel-shadow);
+}
+
+/* ── Left panel ─────────────────────────────────────────────────────────── */
+
+.lpanel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  width: 258px;
+  max-height: calc(100vh - 32px); /* top offset + bottom margin */
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--panel-shadow);
+  transition: transform 0.25s ease, background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Hidden while a trip is selected (or toggled off on mobile) — slides out
+   left on desktop, down on mobile (see media query override below).
+   `visibility` (delayed until the slide finishes) is what takes the search
+   box and the 28 trip rows out of the tab order and the accessibility tree —
+   a transform alone leaves them all reachable with Tab while off-screen. */
+.lpanel { visibility: visible; }
+.lpanel.closed {
+  transform: translateX(calc(-100% - 24px));
+  pointer-events: none;
+  visibility: hidden;
+  transition: transform 0.25s ease, visibility 0s 0.25s;
+}
+
+.lpanel-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--panel-sep);
+  flex-shrink: 0;
+  transition: border-color 0.25s ease;
+}
+
+/* Content-sized blocks centered as a group, rather than 4 equal-width
+   columns — a fixed-width column would force wide values like "137.8k" to
+   overflow toward the panel's outer edge instead of staying centered. */
+.lph-stats {
+  display: flex;
+  justify-content: center;
+}
+
+.lph-stat {
+  flex: 0 0 auto;
+  text-align: center;
+  padding: 0 7px;
+}
+.lph-stat:first-child { padding-left: 0; }
+.lph-stat:last-child { padding-right: 0; }
+.lph-stat + .lph-stat {
+  border-left: 1px solid var(--panel-sep);
+  transition: border-color 0.25s ease;
+}
+
+.lph-stat-v {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+  line-height: 1;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  transition: color 0.25s ease;
+}
+
+.lph-stat-l {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  /* letter-spacing adds a trailing gap after the last character, which
+     text-align: center then centers along with the visible glyphs —
+     pulling them left of true center. Shrink-wrap the label and cancel
+     the trailing gap so the visible text itself sits on the true center. */
+  margin-right: -0.07em;
+  transition: color 0.25s ease;
+}
+
+/* ── Filters (search + year) ────────────────────────────────────────────── */
+
+.lfilters {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+
+.lfilter-search {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-2);
+  transition: border-color 0.13s;
+}
+.lfilter-search::placeholder { color: var(--text-4); }
+.lfilter-search:focus {
+  outline: none;
+  border-color: var(--fbtn-active-border);
+}
+
+.lfilter-year {
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: border-color 0.13s;
+}
+.lfilter-year:focus {
+  outline: none;
+  border-color: var(--fbtn-active-border);
+}
+
+/* ── Trip list ──────────────────────────────────────────────────────────── */
+
+.jempty {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.jscroll {
+  flex: 1;
+  overflow-y: auto;
+  /* don't hand the scroll on to the page (and, on mobile, the map) at the ends */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-sep) transparent;
+}
+.jscroll::-webkit-scrollbar { width: 3px; }
+.jscroll::-webkit-scrollbar-track { background: transparent; }
+.jscroll::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+
+.jyear {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: var(--text-5);
+  padding: 10px 16px 3px;
+}
+
+.jrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  cursor: pointer;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  border: 0;
+  border-left: 2px solid transparent;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+.jrow:hover { background: var(--jrow-hover); }
+.jrow:focus-visible {
+  outline: 1px solid var(--fbtn-active-color);
+  outline-offset: -1px;
+}
+.jrow.sel-trip {
+  background: color-mix(in srgb, var(--sel-color) 8%, transparent);
+  border-left-color: var(--sel-color);
+  padding-left: 14px;
+}
+
+/* countries visited with no recorded trip — informational, not clickable */
+.jrow-extra {
+  cursor: default;
+  border-top: 1px solid var(--panel-sep);
+}
+.jrow-extra:hover { background: transparent; }
+
+.jcat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.65;
+  transition: opacity 0.1s;
+}
+.jrow.sel-trip .jcat-dot { opacity: 1; }
+.jcat-dot-neutral { background: var(--text-4); }
+
+/* The route palette is tuned for dark tiles; on the white panel the lighter
+   colors need an outline to stay visible at 7px. */
+:root.light .jcat-dot {
+  opacity: 1;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.28);
+}
+
+.jinfo { flex: 1; min-width: 0; }
+
+.jname {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.25s ease;
+}
+.jrow.sel-trip .jname { color: var(--text-1); }
+
+.jmeta {
+  font-size: 10px;
+  color: var(--text-4);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.25s ease;
+}
+
+.jkm {
+  font-size: 10px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-5);
+  flex-shrink: 0;
+  transition: color 0.25s ease;
+}
+
+/* ── Detail bar ─────────────────────────────────────────────────────────── */
+
+.dbar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  z-index: 10;
+  transform: translateX(-50%) translateY(10px);
+  width: 520px;
+  max-width: calc(100vw - 24px);
+  background: var(--panel-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--dbar-border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  opacity: 0;
+  pointer-events: none;
+  /* the card keeps the last trip's content mounted so it can fade out; hide it
+     from Tab and screen readers once the fade has finished */
+  visibility: hidden;
+  box-shadow: var(--panel-shadow);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s 0.18s,
+              background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.dbar.show {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s,
+              background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.dbar-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 13px;
+}
+
+.d-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1;
+  transition: color 0.25s ease;
+}
+
+.dbar-tr {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.d-dates {
+  font-size: 11px;
+  color: var(--text-4);
+  transition: color 0.25s ease;
+}
+
+/* The only way to dismiss the card by pointer — negative margins keep the
+   optical position while the hit area grows well past the glyph. */
+.d-close {
+  font-size: 13px;
+  color: var(--text-3);
+  background: none;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 10px;
+  margin: -10px -10px -10px 0;
+  transition: color 0.12s;
+  line-height: 1;
+}
+.d-close:hover { color: var(--text-1); }
+
+.dbar-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding-top: 13px;
+  border-top: 1px solid var(--panel-sep);
+  transition: border-color 0.25s ease;
+}
+
+.dstat { padding: 0 16px 0 0; min-width: 0; }
+.dstat + .dstat {
+  padding: 0 0 0 16px;
+  border-left: 1px solid var(--panel-sep);
+  transition: border-color 0.25s ease;
+}
+.dstat:last-child { padding-right: 0; }
+
+.dstat-v {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--dstat);
+  line-height: 1;
+  transition: color 0.25s ease;
+}
+
+/* long country lists truncate rather than wrap or overflow the column;
+   hover (title attribute) reveals the full list */
+.dstat-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.dstat-l {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  margin-top: 4px;
+  transition: color 0.25s ease;
+}
+
+/* ── Map markers ────────────────────────────────────────────────────────── */
+
+.mkr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.mkr-ring.home {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--mkr-home);
+  background: var(--mkr-home-bg);
+  transition: border-color 0.25s ease, background-color 0.25s ease;
+}
+
+/* ── Mobile ─────────────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .mobile-list-toggle { display: block; }
+
+  /* journeys list becomes a bottom sheet */
+  .lpanel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* above the detail card: toggling the list back open while a trip is
+       selected would otherwise slide the sheet in underneath it */
+    z-index: 12;
+    width: auto;
+    max-height: 50vh;
+    max-height: 50dvh;
+    border-radius: 12px 12px 0 0;
+    border-bottom: none;
+    /* clear the home indicator */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transform: translateY(0);
+    transition: transform 0.25s ease, background-color 0.25s ease,
+                border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+  .lpanel.closed {
+    transform: translateY(105%);
+    transition: transform 0.25s ease, visibility 0s 0.25s;
+  }
+
+  .dbar {
+    left: 12px;
+    right: 12px;
+    /* sits above the attribution strip rather than clipping its top edge */
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    max-width: none;
+    transform: translateY(10px);
+  }
+  .dbar.show { transform: translateY(0); }
+
+  .dbar-stats {
+    grid-auto-flow: row;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+  }
+  .dstat, .dstat + .dstat {
+    padding: 0;
+    border-left: none;
+  }
+}
+
+/* ── Touch targets ──────────────────────────────────────────────────────── */
+/* Sized for the mouse by default; on touch every control gets to ~44px. */
+
+@media (pointer: coarse) {
+  .style-menu-toggle,
+  .visited-toggle { width: 44px; height: 44px; }
+
+  .style-menu-popover { top: 50px; }
+  .style-menu-item    { padding: 12px 10px; font-size: 12px; }
+
+  .lfilter-search,
+  .lfilter-year { padding: 10px 9px; font-size: 13px; }
+
+  .jrow { padding: 13px 16px; }
+  .jrow.sel-trip { padding-left: 14px; }
+
+  .d-close { padding: 13px; margin: -13px -13px -13px 0; }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+/* Panels appear instantly instead of sliding; the map's fly-to glides are
+   turned off in MapView (see prefersReducedMotion). */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .lpanel.closed, .dbar { transition: none !important; }
+}

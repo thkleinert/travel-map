@@ -1,0 +1,21 @@
+# Cloudflare Pages matches request paths, and the app is loaded as "/" — a rule
+# for /index.html alone would never fire. Both are listed so a tab left open
+# across a deploy always revalidates the HTML, instead of holding on to stale
+# references to content-hashed chunk filenames that no longer exist.
+/
+  Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/index.html
+  Cache-Control: no-cache
+
+# Filenames change whenever their content does.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Route geometry only changes when a trip is added or re-imported. A day of
+# caching plus background revalidation keeps repeat visits cheap without
+# pinning a stale track for a year.
+/*.geojson
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
