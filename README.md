@@ -8,7 +8,7 @@
 
 A self-hosted travel log built around a full-screen interactive map. Each journey
 is a real routed track — not a pin — drawn in its own colour, with its stops, its
-dates, and the distance you actually covered. Twenty-eight trips or two hundred,
+dates, and the distance you actually covered. A dozen trips or two hundred,
 it stays one page: pick a year, search a country, tap a route, and the map flies
 to it.
 
@@ -20,6 +20,7 @@ geometry is GeoJSON on disk, and the whole thing deploys as static files.
 [![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
 [![Cloudflare Pages](https://img.shields.io/badge/Cloudflare-Pages-f38020?logo=cloudflare&logoColor=white)](https://pages.cloudflare.com)
 [![No API keys](https://img.shields.io/badge/API%20keys-none-2ea043)](#1-prerequisites)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 <br />
 
@@ -218,6 +219,11 @@ database, no auth provider, no tile subscription.
 
 ### 2. Clone and Install
 
+This is a template repository: to keep your own map, hit **Use this template**
+on GitHub first — and choose **Private** unless you want your travel history
+public, since your trips will be committed to your copy — then clone that. A
+plain clone is fine for a quick look:
+
 ```bash
 git clone https://github.com/thkleinert/travel-map.git travels
 cd travels
@@ -344,8 +350,9 @@ file server is required.
 - Or deploy by hand:
   ```bash
   npm run build
-  npx wrangler pages deploy dist --project-name travels
+  npx wrangler pages deploy dist --project-name <your-project>
   ```
+  (`wrangler.toml` carries the project name — set it to yours.)
 
 **Any other static host:** serve `dist/`. There is a single route (`/`), so no
 SPA rewrite rules are needed. Two cache details are worth porting from
@@ -375,13 +382,14 @@ add a `robots.txt` to `public/`.
 
 ## Performance
 
-The full-precision tracks in `data/routes/` add up to **72 MB** and about **967 000
-coordinate pairs** — road-network detail that is invisible on a map opening at
-zoom 2. So the build thins the copies it emits:
+The full-precision tracks of a real, years-deep travel log (the one this app
+was built around) add up to **72 MB** and about **967 000 coordinate pairs** —
+road-network detail that is invisible on a map opening at zoom 2. So the build
+thins the copies it emits:
 
 | | raw | gzipped |
 |---|---|---|
-| `data/routes/*.geojson` (kept in the repo) | 71.7 MB | 8.8 MB |
+| `data/routes/*.geojson` (kept in your repo) | 71.7 MB | 8.8 MB |
 | `dist/*.geojson` (served) | **4.9 MB** | **1.5 MB** |
 
 `scripts/simplify-geojson.js` runs Ramer–Douglas–Peucker at a ~11 m tolerance,
@@ -485,6 +493,7 @@ docs/                  logo and README screenshots
     routing by <a href="https://project-osrm.org">OSRM</a>.<br />
     Built with <a href="https://react.dev">React</a>,
     <a href="https://vite.dev">Vite</a> and
-    <a href="https://leafletjs.com">Leaflet</a>.
+    <a href="https://leafletjs.com">Leaflet</a> ·
+    <a href="LICENSE">MIT licensed</a>.
   </sub>
 </div>
