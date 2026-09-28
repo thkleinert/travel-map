@@ -25,7 +25,7 @@ src/
   data/
     tripHelpers.js     — dates/countries/palette/distance helpers, no data, so
                          both datasets can share them
-    mapStyles.js       — selectable tile styles (url, theme, casing, maxZoom)
+    mapStyles.js       — selectable tile styles (url, theme, casing, zoom caps)
     worldCountries.js  — visited-countries overlay data (world-atlas + topojson)
     ukCountries.topo.json — England/Scotland/Wales/NI boundaries (see below)
 data/                  — the real dataset (used whenever data/trips.js exists)
@@ -49,7 +49,7 @@ public/                — Vite publicDir: served from the site root verbatim
 
 ## Stack
 
-React 18 + Vite 5 + react-leaflet 4. Tiles: CartoDB (no key) + Esri.
+React 18 + Vite 5 + react-leaflet 4. Tiles: Esri ArcGIS Online (no key).
 World country boundaries via `world-atlas` + `topojson-client` (bundled,
 code-split — see Map behavior below). Deployed to Cloudflare Pages —
 auto-deploys on push to `main`.
@@ -216,7 +216,7 @@ adding a trip at the top shifts the others — pin `color:` to prevent that.
   creation order: `visited-countries` (z 398) below `route-casing` (z 399)
   below the default overlay pane (400) that holds the routes. Sharing one pane
   meant a casing re-created after a style switch drew *over* its own route.
-- **Attribution**: required by OSM/CARTO/Esri — do not hide the Leaflet
+- **Attribution**: required by Esri/OSM — do not hide the Leaflet
   attribution control. It lives inside the map's stacking context, so the
   floating panels would cover it; `App.jsx` publishes the mobile sheet's height
   as `--ui-bottom` and the CSS lifts the control clear of it.

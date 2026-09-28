@@ -64,7 +64,7 @@ export default function App() {
 
   // Leaflet's attribution control lives bottom-right *inside* the map's
   // stacking context, so on mobile the bottom sheet paints straight over it —
-  // and the OSM/CARTO/Esri terms require it to stay visible. Publish the
+  // and the Esri/OSM terms require it to stay visible. Publish the
   // sheet's height so the CSS can lift the attribution clear of it.
   useLayoutEffect(() => {
     const el = appRef.current

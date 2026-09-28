@@ -112,7 +112,7 @@ A ring at your home city anchors the whole map.
 
 <img align="left" src="docs/screenshots/desktop-stylemenu.jpg" width="420" alt="The map style menu: Dark, Light, Street, Satellite" />
 
-**Dark**, **Light** (both CARTO), **Street** and **Satellite** (both Esri) —
+**Dark**, **Light**, **Street** and **Satellite** — four Esri basemaps,
 switchable from the corner, no tokens or accounts for any of them.
 
 The basemap drives the whole interface: picking a light style repaints the
@@ -174,7 +174,7 @@ flowchart LR
     end
     geo --> simplify --> app
     meta --> app
-    app -->|"tiles"| cdn["CARTO / Esri"]
+    app -->|"tiles"| cdn["Esri basemaps"]
     app -.-> atlas
 ```
 
@@ -182,7 +182,7 @@ flowchart LR
 |---|---|
 | Frontend | React 18 + Vite 5, plain CSS with custom properties for theming |
 | Map | Leaflet 1.9 via react-leaflet 4 — routes as GeoJSON layers, stops as `divIcon` markers |
-| Tiles | CARTO Dark/Light + Esri Street/Satellite — all keyless |
+| Tiles | Esri Dark/Light Gray Canvas + Esri Street/Satellite — all keyless |
 | Country shapes | `world-atlas` 50 m + `topojson-client`, plus a bundled UK-nations topology |
 | Trip data | `data/trips.js` (metadata) + `data/routes/*.geojson` (geometry) — or the synthetic set under `demo/` |
 | Routing / geocoding | Public OSRM + Nominatim, at authoring time only — never at runtime |
@@ -213,7 +213,7 @@ database, no auth provider, no tile subscription.
 - **Node.js 20+** and npm (`.nvmrc` pins 22)
 - Any static host for the production build — Cloudflare Pages, Netlify, Vercel,
   GitHub Pages, or a plain nginx directory
-- **No API keys of any kind.** Tiles come from CARTO's and Esri's public
+- **No API keys of any kind.** Tiles come from Esri's public ArcGIS Online
   endpoints; geocoding and routing use the public Nominatim and OSRM services,
   and only when you run the authoring scripts
 
@@ -317,7 +317,7 @@ The stats in the panel need no updating; they are computed from the array.
 | Home marker | `HOME` in `data/trips.js` — `{ coords: [lat, lng], label }` |
 | Countries with no recorded trip | `extraVisitedCountries` in `data/trips.js` |
 | Route colours | `PALETTE` in `src/data/tripHelpers.js`; pin a trip with `color:` |
-| Basemaps | `MAP_STYLES` in `src/data/mapStyles.js` (url, `theme`, `casing`, `maxZoom`) |
+| Basemaps | `MAP_STYLES` in `src/data/mapStyles.js` (url, `theme`, `casing`, `maxZoom`, `maxNativeZoom`) |
 | Colours, spacing, type | the two token blocks at the top of `src/App.css` |
 | Default world view | `DEFAULT_BOUNDS` in `src/components/MapView.jsx` |
 | Title, description, icons | `index.html` and `public/favicon.svg` |
@@ -487,8 +487,7 @@ docs/                  logo and README screenshots
     Every screenshot shows the synthetic demo dataset — twelve routes nobody
     actually travelled.<br />
     Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors ·
-    tiles © <a href="https://carto.com/attributions">CARTO</a> and
-    <a href="https://www.esri.com">Esri</a> ·
+    tiles © <a href="https://www.esri.com">Esri</a> ·
     boundaries from <a href="https://www.naturalearthdata.com">Natural Earth</a> ·
     routing by <a href="https://project-osrm.org">OSRM</a>.<br />
     Built with <a href="https://react.dev">React</a>,

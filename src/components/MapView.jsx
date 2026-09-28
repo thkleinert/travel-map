@@ -354,6 +354,7 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
           attribution={mapStyle.attr}
           subdomains={mapStyle.sub}
           maxZoom={mapStyle.maxZoom}
+          maxNativeZoom={mapStyle.maxNativeZoom}
         />
 
         {/* Visited-countries overlay — a manual scratch map of every country
