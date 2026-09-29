@@ -21,6 +21,7 @@ src/
   components/
     Sidebar.jsx        — floating journeys panel: stats header, year-grouped list
     MapView.jsx        — Leaflet map, GeoJSON routes + stop markers, fitBounds
+    smoothWheelZoom.js — continuous wheel/trackpad zoom handler (see Map behavior)
     DetailBar.jsx      — floating trip detail card (bottom center)
   data/
     tripHelpers.js     — dates/countries/palette/distance helpers, no data, so
@@ -169,6 +170,11 @@ adding a trip at the top shifts the others — pin `color:` to prevent that.
 - **Styles** (`src/data/mapStyles.js`): each has a tile URL, a `theme`
   (drives the `:root.light` UI palette), and optional `casing` — a halo drawn
   under routes on busy tiles (Street/Satellite).
+- **Zoom**: Leaflet's stepped `scrollWheelZoom` is off; `smoothWheelZoom.js`
+  replaces it with a per-frame eased zoom around the cursor (trackpads stream
+  tiny deltas, which the stock 40 ms batch-snap-animate cycle turned into
+  stutter; pinch arrives as ctrl+wheel and gets its own gain). +/− buttons sit
+  bottom right above the attribution, hidden on mobile (pinch + detail card).
 - **Selection**: click a row or stop marker → `fitBounds` on the trip's track;
   other trips dim to near-invisible. Deselect via map click, Escape, ✕, or
   re-click. The journeys panel slides away while a trip is selected (any

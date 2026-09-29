@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, GeoJSON, Marker, Pane, Tooltip, useMap, useMap
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { HOME, tripColor, tripCountries, extraVisitedCountries } from '../data/trips'
+import { SmoothWheelZoom } from './smoothWheelZoom'
 
 // Visited-countries "scratch map" overlay — a neutral tint, independent of
 // any single trip's color, so it reads as background context rather than
@@ -221,6 +222,36 @@ function ViewController({ activeTrip, bounds, listOpen }) {
   return null
 }
 
+// Replaces Leaflet's stepped scrollWheelZoom (disabled on the MapContainer)
+function SmoothWheel() {
+  const map = useMap()
+  useEffect(() => {
+    const handler = new SmoothWheelZoom(map)
+    handler.enable()
+    return () => handler.disable()
+  }, [map])
+  return null
+}
+
+// +/− buttons. Rendered inside the map container so they can reach the map,
+// which means map click/dblclick/drag handlers would see their clicks too —
+// hence disableClickPropagation (a click would otherwise deselect the trip).
+function ZoomButtons() {
+  const map = useMap()
+  const ref = useRef(null)
+  useEffect(() => {
+    L.DomEvent.disableClickPropagation(ref.current)
+    L.DomEvent.disableScrollPropagation(ref.current)
+  }, [])
+  const zoom = delta => map.setZoom(map.getZoom() + delta, { animate: !prefersReducedMotion() })
+  return (
+    <div className="zoom-controls" ref={ref}>
+      <button onClick={() => zoom(1)} aria-label="Zoom in" title="Zoom in">+</button>
+      <button onClick={() => zoom(-1)} aria-label="Zoom out" title="Zoom out">−</button>
+    </div>
+  )
+}
+
 function MapEvents({ onDeselect, onZoom }) {
   useMapEvents({
     click: () => onDeselect(),
@@ -347,6 +378,7 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
         /* quarter-step zoom: whole-number steps overshoot the fit on narrow
            viewports and clip the edges of the bounds */
         zoomSnap={0.25}
+        scrollWheelZoom={false}
       >
         <TileLayer
           key={mapStyle.id}
@@ -377,6 +409,8 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
           listOpen={listOpen}
         />
         <MapEvents onDeselect={onDeselect} onZoom={setZoom} />
+        <SmoothWheel />
+        <ZoomButtons />
 
         {/* Casing — halo under routes on busy or pale tile styles.
             It lives in its own pane below the default overlay pane: sharing
