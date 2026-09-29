@@ -48,6 +48,7 @@ geometry is GeoJSON on disk, and the whole thing deploys as static files.
   - [5. Run It](#5-run-it)
   - [6. Deploy](#6-deploy)
   - [7. Keep It Private (Optional)](#7-keep-it-private-optional)
+  - [8. Edit Stops in the Browser (Optional)](#8-edit-stops-in-the-browser-optional)
 - [Performance](#performance)
 - [Accessibility](#accessibility)
 - [Development](#development)
@@ -105,6 +106,13 @@ as gaps in the track. They still count towards the trip's distance (see
 from hops rather than roads.
 
 A ring at your home city anchors the whole map.
+
+Names wrong, or a stop in the wrong spot? Switch on **edit mode** (the pencil,
+top right), select a trip, and drag its stops, click one to rename or delete
+it, or click the map to add one. Undo walks back each change; Save writes them
+all to the route files in one go. It's always available under `npm run dev`,
+and can be turned on for the deployed site too — see
+[step 8](#8-edit-stops-in-the-browser-optional).
 
 <br clear="right" />
 
@@ -341,7 +349,8 @@ preview the build if you want production behaviour.
 ### 6. Deploy
 
 The output is static files with **no server-side routing**, so nothing beyond a
-file server is required.
+file server is required. (The one exception is the optional edit mode's
+Pages Function — see [step 8](#8-edit-stops-in-the-browser-optional).)
 
 **Cloudflare Pages** (what this repo is set up for — `wrangler.toml` included):
 
@@ -363,8 +372,9 @@ SPA rewrite rules are needed. Two cache details are worth porting from
   HTML file keeps requesting content-hashed chunk filenames that a later deploy
   has already replaced.
 - `/assets/*` can be cached forever (`immutable`); those filenames change
-  whenever their contents do. `*.geojson` gets a day, plus background
-  revalidation.
+  whenever their contents do. So can `*.geojson`: the app requests each route
+  file as `/<trip>.geojson?v=<content hash>`, with the hashes baked into the
+  build, so an edited route always arrives under a new URL.
 
 Anything you want served from the site root — icons, `_headers`, `robots.txt`
 — lives in `public/`; the active dataset's `*.geojson` files are copied in
@@ -377,6 +387,34 @@ indexed. The app has no auth of its own; put it behind your host's instead —
 **Cloudflare Access** in front of a Pages project gives you e-mail-code or SSO
 login with no code changes. Failing that, host it on a path nobody guesses and
 add a `robots.txt` to `public/`.
+
+### 8. Edit Stops in the Browser (Optional)
+
+Under `npm run dev`, edit mode is always on: saves go straight into the active
+dataset's `routes/*.geojson`, and you commit them like any other change.
+
+On a deployed Cloudflare Pages site, edit mode commits to your GitHub repo
+instead, through the Pages Function in
+[`functions/api/edit/`](functions/api/edit/%5B%5Bpath%5D%5D.js) — every Save is
+one commit, which triggers the usual redeploy. It stays off (the pencil never
+appears) until all of these are set in the Pages project's settings:
+
+| Variable | Value |
+|---|---|
+| `GITHUB_TOKEN` (secret) | fine-grained personal access token — **Contents: read and write** on the dataset repo only |
+| `GITHUB_REPO` | `owner/name` of that repo |
+| `ACCESS_TEAM_DOMAIN` | your Zero Trust team domain, e.g. `myteam.cloudflareaccess.com` |
+| `ACCESS_AUD` | the Access application's *Application Audience (AUD) tag* |
+| `GITHUB_BRANCH`, `ROUTES_DIR` | optional — default `main` and `data/routes` |
+
+Edit mode writes to your repository, so **it requires Cloudflare Access** in
+front of the site ([step 7](#7-keep-it-private-optional)). The Function
+verifies the Access token on every request itself, rather than relying on the
+policy alone, and refuses anything without a valid one. The heavy lifting
+(parsing and rewriting multi-megabyte route files) happens in the browser; the
+Function only relays bytes to the GitHub API, so it fits the free plan's CPU
+limit. If someone else pushes while you edit, Save refuses rather than
+overwrite — reload and redo the changes.
 
 ---
 
@@ -462,7 +500,12 @@ src/
   components/
     Sidebar.jsx        journeys panel — stats, search, year filter, trip rows
     MapView.jsx        Leaflet map, routes, stops, panes, view fitting
+    smoothWheelZoom.js continuous trackpad / wheel zoom
     DetailBar.jsx      floating trip detail card
+    EditBar.jsx        edit-mode toolbar (undo / save)
+  edit/
+    editApi.js         edit-mode client: rewrites route files, talks to /api/edit
+    useStopEditor.js   draft / undo / save state
   data/
     tripHelpers.js     dates, countries, palette, distances — no data
     mapStyles.js       the four basemaps
@@ -477,6 +520,7 @@ scripts/
   compute-km.js        measure kmTotal from the tracks
   simplify-geojson.js  build-time route thinning
   build-uk-countries.js
+functions/api/edit/    Pages Function behind edit mode on the deployed site
 docs/                  logo and README screenshots
 ```
 

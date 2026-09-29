@@ -23,6 +23,10 @@ src/
     MapView.jsx        — Leaflet map, GeoJSON routes + stop markers, fitBounds
     smoothWheelZoom.js — continuous wheel/trackpad zoom handler (see Map behavior)
     DetailBar.jsx      — floating trip detail card (bottom center)
+    EditBar.jsx        — edit-mode toolbar (see Edit mode below)
+  edit/
+    editApi.js         — edit-mode client: /api/edit calls, applyStops()
+    useStopEditor.js   — draft / undo history / save state
   data/
     tripHelpers.js     — dates/countries/palette/distance helpers, no data, so
                          both datasets can share them
@@ -42,6 +46,7 @@ demo/                  — synthetic dataset for screenshots and development
   trips.js             — same shape as data/trips.js (12 invented trips)
   routes/*.geojson     — generated with make-route, then pre-simplified
   stops/*.json         — the stop lists they were generated from
+functions/api/edit/    — Pages Function: edit mode's GitHub relay (deployed only)
 public/                — Vite publicDir: served from the site root verbatim
   favicon.svg,
   apple-touch-icon.png — site icons
@@ -232,6 +237,42 @@ adding a trip at the top shifts the others — pin `color:` to prevent that.
   `prefers-reduced-motion` turns off both the CSS transitions and the map's
   fly-to glides.
 
+## Edit mode
+
+Pencil button (top right) → select a trip → drag stops to move, click one for
+a rename/delete popup, click the map to add one (name prefilled by a Nominatim
+reverse geocode). Edits are drafted in `useStopEditor` with one undo step each
+(Undo button, ⌘Z); Save writes every touched trip in a single commit.
+
+The button only appears when `GET /api/edit` answers `{ enabled: true }`:
+
+- **`npm run dev`**: `devEditApi` in `vite.config.js` serves `/api/edit` from
+  the active dataset's `routes/` dir — Save writes the files directly.
+- **Deployed**: `functions/api/edit/[[path]].js` relays to the GitHub API and
+  is 404 unless `GITHUB_TOKEN`, `GITHUB_REPO`, `ACCESS_TEAM_DOMAIN` and
+  `ACCESS_AUD` are set (README step 8). It verifies the Cloudflare Access JWT
+  itself on every request. It never parses route files — they run to 12 MB and
+  a Function's CPU budget is milliseconds — so the browser fetches the
+  full-precision source (`/api/edit/file/<name>?ref=<head>`), rewrites it
+  (`applyStops`), and uploads it base64 as a blob; the Function wraps that in
+  the blob API's JSON without decoding it, then makes tree → commit →
+  non-forced ref update (409 if the branch moved).
+
+`applyStops` identifies stops by index among the file's Point features (the
+build's simplify step keeps feature order) and checks each against the source
+coordinates before writing. Undragged stops keep their full-precision
+coordinates — the map only has the simplified copy's 5-decimal ones. It keeps
+the file's own layout (2-space pretty vs compact) so diffs stay small.
+
+Clicks inside the stop popup defer their DOM changes with `setTimeout`:
+Leaflet decides "popup click vs map click" by walking up from the target, and
+a popup already removed from the DOM made Delete also add a stop.
+
+**Route file caching**: `datasetRoutes` exposes `virtual:route-versions`
+(content hash per file, build only) and the app fetches
+`/<trip>.geojson?v=<hash>`, so `_headers` caches `*.geojson` as immutable.
+Before this, renamed stops kept showing old names for up to a week.
+
 ## Deploy
 
 Push to `main` — Cloudflare Pages builds and deploys automatically.
@@ -244,7 +285,8 @@ fired. Without it a stale `index.html` keeps requesting an old build's
 content-hashed chunk filenames (e.g. the async `worldCountries` chunk), which
 404 silently once enough deploys have passed. Hashed files under `/assets/*`
 stay aggressively cached since their filename changes whenever their content
-does; `*.geojson` gets a day of caching plus background revalidation.
+does; `*.geojson` is immutable too, because the app requests it as
+`?v=<content hash>` (see Edit mode → Route file caching).
 
 Manual fallback:
 

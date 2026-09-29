@@ -32,6 +32,8 @@
   --fbtn-active-border:  rgba(79,168,255,0.35);
   --fbtn-active-color:   #4FA8FF;
 
+  --danger:              #F47067;
+
   --jrow-hover:          rgba(255,255,255,0.025);
 
   --dbar-border:         rgba(79,168,255,0.18);
@@ -64,6 +66,8 @@
   --fbtn-active-bg:      rgba(29,111,216,0.09);
   --fbtn-active-border:  rgba(29,111,216,0.35);
   --fbtn-active-color:   #1D6FD8;
+
+  --danger:              #CF222E;
 
   --jrow-hover:          rgba(0,0,0,0.025);
 
@@ -193,7 +197,8 @@ button, input, select { -webkit-tap-highlight-color: transparent; }
 }
 
 .style-menu-toggle,
-.visited-toggle {
+.visited-toggle,
+.edit-toggle {
   width: 34px;
   height: 34px;
   border-radius: 8px;
@@ -210,18 +215,95 @@ button, input, select { -webkit-tap-highlight-color: transparent; }
   transition: border-color 0.13s, color 0.13s, background-color 0.2s ease;
 }
 .style-menu-toggle:hover,
-.visited-toggle:hover {
+.visited-toggle:hover,
+.edit-toggle:hover {
   border-color: var(--fbtn-hover-border);
   color: var(--fbtn-hover-color);
 }
 .style-menu-toggle.active,
-.visited-toggle.active {
+.visited-toggle.active,
+.edit-toggle.active {
   color: var(--fbtn-active-color);
   border-color: var(--fbtn-active-border);
   background: var(--fbtn-active-bg);
 }
 .style-menu-toggle svg,
-.visited-toggle svg { display: block; }
+.visited-toggle svg,
+.edit-toggle svg { display: block; }
+
+/* ── Edit mode ─────────────────────────────────────────────────────────── */
+
+.editbar {
+  position: absolute;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 14px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--fbtn-active-border);
+  border-radius: 8px;
+  box-shadow: var(--panel-shadow);
+}
+.editbar-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.editbar-title { font-size: 12px; font-weight: 600; color: var(--text-1); }
+.editbar-hint  { font-size: 11px; color: var(--text-4); }
+.editbar-hint.saved { color: var(--fbtn-active-color); }
+.editbar-hint.error { color: var(--danger); }
+.editbar-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.editbar-actions button,
+.stop-form button {
+  font: 500 12px/1 var(--font);
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.editbar-actions button:hover:not(:disabled),
+.stop-form button:hover { border-color: var(--fbtn-hover-border); color: var(--text-1); }
+.editbar-actions button:disabled { opacity: 0.4; cursor: default; }
+.editbar-actions button.primary,
+.stop-form button[type="submit"] {
+  background: var(--fbtn-active-bg);
+  border-color: var(--fbtn-active-border);
+  color: var(--fbtn-active-color);
+}
+.stop-form button.danger { color: var(--danger); }
+
+/* adding a stop is a click on the map */
+.map-container.editing .leaflet-container { cursor: crosshair; }
+.stop-edit { cursor: grab; }
+.stop-edit div { box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 3px currentColor; color: var(--text-1); }
+.stop-edit.leaflet-drag-target { cursor: grabbing; }
+
+.stop-popup .leaflet-popup-content-wrapper {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: var(--panel-shadow);
+  color: var(--text-2);
+}
+.stop-popup .leaflet-popup-content { margin: 10px; }
+.stop-popup .leaflet-popup-tip { background: var(--panel-bg); }
+.stop-form { display: flex; flex-direction: column; gap: 8px; width: 210px; }
+.stop-form input {
+  font: 400 13px/1.2 var(--font);
+  padding: 7px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-1);
+}
+.stop-form input:focus { outline: none; border-color: var(--fbtn-active-border); }
+.stop-form-actions { display: flex; justify-content: space-between; }
 
 /* Zoom +/− (bottom right, above the attribution). Lives inside the map
    container, so it needs Leaflet's control z-index to clear the panes. */
@@ -700,6 +782,10 @@ button, input, select { -webkit-tap-highlight-color: transparent; }
   /* pinch-zoom covers it, and the full-width detail card owns this corner */
   .zoom-controls { display: none; }
 
+  /* below the topbar buttons instead of between them; hint text drops out */
+  .editbar { top: calc(64px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; transform: none; max-width: none; justify-content: space-between; }
+  .editbar-hint:not(.saved):not(.error) { display: none; }
+
   /* journeys list becomes a bottom sheet */
   .lpanel {
     top: auto;
@@ -752,7 +838,8 @@ button, input, select { -webkit-tap-highlight-color: transparent; }
 
 @media (pointer: coarse) {
   .style-menu-toggle,
-  .visited-toggle { width: 44px; height: 44px; }
+  .visited-toggle,
+  .edit-toggle { width: 44px; height: 44px; }
   .zoom-controls button { width: 44px; height: 44px; }
 
   .style-menu-popover { top: 50px; }

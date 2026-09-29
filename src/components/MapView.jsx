@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MapContainer, TileLayer, GeoJSON, Marker, Pane, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, Marker, Pane, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { HOME, tripColor, tripCountries, extraVisitedCountries } from '../data/trips'
 import { SmoothWheelZoom } from './smoothWheelZoom'
+import routeVersions from 'virtual:route-versions'
+import { suggestName } from '../edit/editApi'
 
 // Visited-countries "scratch map" overlay — a neutral tint, independent of
 // any single trip's color, so it reads as background context rather than
@@ -68,11 +70,13 @@ function prefersReducedMotion() {
 // and returning the same object lets react-leaflet skip setIcon calls.
 const iconCache = new Map()
 
-function stopIcon(color, size, opacity) {
-  const key = `${color}|${size}|${opacity}`
+// `edit` adds a ring and a grab cursor: in edit mode the active trip's stops
+// are draggable, and need to read as handles rather than decoration.
+function stopIcon(color, size, opacity, edit = false) {
+  const key = `${color}|${size}|${opacity}|${edit}`
   if (!iconCache.has(key)) {
     iconCache.set(key, L.divIcon({
-      className: '',
+      className: edit ? 'stop-edit' : '',
       html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};opacity:${opacity}"></div>`,
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
@@ -104,6 +108,7 @@ function uiInsets(listOpen, activeTrip) {
   const mobile = window.matchMedia(MOBILE_QUERY).matches
   const panel  = listOpen ? document.querySelector('.lpanel') : null
   const dbar   = activeTrip ? document.querySelector('.dbar') : null
+  const ebar   = document.querySelector('.editbar')
 
   const left   = panel && !mobile ? panel.offsetLeft + panel.offsetWidth : 0
   const bottom = (panel && mobile ? panel.offsetHeight : 0) +
@@ -112,7 +117,7 @@ function uiInsets(listOpen, activeTrip) {
   return {
     // the floating top buttons only need clearing when a route is being
     // framed; the world view reads better centred edge to edge
-    paddingTopLeft:     [left + edge, edge + (activeTrip ? 40 : 0)],
+    paddingTopLeft:     [left + edge, edge + (ebar ? ebar.offsetTop + ebar.offsetHeight : activeTrip ? 40 : 0)],
     paddingBottomRight: [edge, bottom + edge],
   }
 }
@@ -154,7 +159,7 @@ function defaultView(map, insets) {
   return { center: map.unproject(anchor.add(size.divideBy(2)).subtract(box), zoom), zoom }
 }
 
-function ViewController({ activeTrip, bounds, listOpen }) {
+function ViewController({ activeTrip, bounds, listOpen, editing }) {
   const map = useMap()
   const prevId  = useRef(null)
   const mounted = useRef(false)
@@ -207,6 +212,15 @@ function ViewController({ activeTrip, bounds, listOpen }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listOpen])
 
+  // The edit bar claims the top edge (see uiInsets) — re-frame once it has
+  // rendered, so no stop of the selected trip is left underneath it.
+  const editMounted = useRef(false)
+  useEffect(() => {
+    if (!editMounted.current) { editMounted.current = true; return }
+    if (activeTrip) applyView(true, 0.5)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing])
+
   // Rotation / window resize changes both the container and the sheet height
   useEffect(() => {
     const onResize = () => {
@@ -252,12 +266,43 @@ function ZoomButtons() {
   )
 }
 
-function MapEvents({ onDeselect, onZoom }) {
+function MapEvents({ onMapClick, onZoom }) {
   useMapEvents({
-    click: () => onDeselect(),
+    click: e => onMapClick(e.latlng),
     zoomend: e => onZoom(e.target.getZoom()),
   })
   return null
+}
+
+// Rename / delete form, shown in a popup on an editable stop
+function StopForm({ stop, onRename, onDelete }) {
+  const map = useMap()
+  const [name, setName] = useState(stop.name ?? '')
+  // Close and apply only once the click has finished dispatching. Leaflet
+  // tells a popup click from a map click by walking up from the target; if
+  // the popup is already gone from the DOM by then, the walk finds no popup
+  // and the click also lands on the map — which in edit mode adds a stop.
+  const done = action => setTimeout(() => { map.closePopup(); action?.() })
+  const submit = e => {
+    e.preventDefault()
+    const trimmed = name.trim()
+    done(trimmed && trimmed !== stop.name ? () => onRename(trimmed) : null)
+  }
+  return (
+    <form className="stop-form" onSubmit={submit}>
+      <input
+        value={name}
+        onChange={e => setName(e.target.value)}
+        aria-label="Stop name"
+        placeholder="Stop name"
+        autoFocus
+      />
+      <div className="stop-form-actions">
+        <button type="button" className="danger" onClick={() => done(onDelete)}>Delete</button>
+        <button type="submit">Rename</button>
+      </div>
+    </form>
+  )
 }
 
 // Stop dots shrink when zoomed out so dense clusters don't fuse into blobs
@@ -266,8 +311,13 @@ function stopSize(zoom, isActive) {
   return isActive ? base + 3 : base
 }
 
-export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, showVisited, listOpen, onSelect, onDeselect }) {
-  // { [tripId]: { lines, stops: [{ pos: [lat,lng], name }], bounds: L.LatLngBounds } }
+export default function MapView({
+  trips, activeTrip, hoveredTrip, mapStyle, showVisited, listOpen, onSelect, onDeselect,
+  editing = false, stopOverrides = {}, onStopsChange,
+}) {
+  // { [tripId]: { lines, stops: [{ key, pos: [lat,lng], name, src, orig }], bounds: L.LatLngBounds } }
+  // src is the stop's index among the file's Point features and orig its
+  // position as loaded — edit mode uses both to write changes back safely.
   const [tripData, setTripData] = useState({})
   const [zoom, setZoom] = useState(2)
   // Reading `tripData` inside the loop below would only ever see the snapshot
@@ -294,7 +344,9 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
       if (requested.current.has(trip.id)) return
       requested.current.add(trip.id)
       try {
-        const res = await fetch(trip.geojsonPath)
+        // ?v=<content hash> on builds: the URL changes whenever the file does
+        const v   = routeVersions[trip.geojsonPath.replace(/^\//, '')]
+        const res = await fetch(v ? `${trip.geojsonPath}?v=${v}` : trip.geojsonPath)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const raw = await res.json()
 
@@ -306,9 +358,13 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
             const name = f.properties?.name ?? null
             if (f.geometry?.type === 'Point') {
               // GeoJSON coords are [lng, lat]; Leaflet wants [lat, lng]
-              stops.push({ pos: [f.geometry.coordinates[1], f.geometry.coordinates[0]], name })
+              const pos = [f.geometry.coordinates[1], f.geometry.coordinates[0]]
+              const src = stops.length
+              stops.push({ key: `${trip.id}:${src}`, pos, name, src, orig: pos })
             } else if (f.geometry?.type === 'MultiPoint') {
-              f.geometry.coordinates.forEach(c => stops.push({ pos: [c[1], c[0]], name }))
+              // not editable (src: null would read as "new"), hence `fixed`
+              f.geometry.coordinates.forEach((c, j) =>
+                stops.push({ key: `${trip.id}:m${stops.length}:${j}`, pos: [c[1], c[0]], name, fixed: true }))
             }
           })
         }
@@ -338,6 +394,34 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
     trips.forEach(trip => { map[trip.id] = { click: () => onSelectRef.current?.(trip) } })
     return map
   }, [trips])
+
+  const stopsOf = id => stopOverrides[id] ?? tripData[id]?.stops
+
+  // Edit mode acts on the selected trip only; everything else behaves as usual
+  const editTrip = editing && activeTrip && tripData[activeTrip.id]
+    && !tripData[activeTrip.id].stops.some(s => s.fixed) ? activeTrip : null
+  const editStops = editTrip ? stopsOf(editTrip.id) : null
+  const updateStops = next => onStopsChange?.(editTrip.id, editStops, next)
+  const patchStop = (key, patch) => updateStops(editStops.map(s => (s.key === key ? { ...s, ...patch } : s)))
+
+  // Clicking the map adds a stop there while editing, instead of deselecting.
+  // The name is a reverse-geocode suggestion — rename it from its popup.
+  // The lookup is async, so the stop is appended to whatever the stops are
+  // once it returns (via the ref), not to the render the click happened in.
+  const latest = useRef(null)
+  useEffect(() => { latest.current = { editTrip, editStops, onStopsChange } })
+  const newStopId = useRef(0)
+  async function handleMapClick(latlng) {
+    if (!editTrip) { onDeselect(); return }
+    const pos  = [latlng.lat, latlng.lng]
+    const trip = editTrip
+    const key  = `${trip.id}:n${++newStopId.current}`
+    const name = (await suggestName(pos)) ?? 'New stop'
+    const now  = latest.current
+    // the trip may have been closed while the name lookup was in flight
+    if (now.editTrip?.id !== trip.id) return
+    now.onStopsChange?.(trip.id, now.editStops, [...now.editStops, { key, pos, name, src: null, orig: pos }])
+  }
 
   const hoverData = hoveredTrip && hoveredTrip.id !== activeTrip?.id
     ? tripData[hoveredTrip.id]
@@ -370,7 +454,7 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
   }, [showVisited, visitedGeoJSON, visitedCountries])
 
   return (
-    <div className="map-container">
+    <div className={`map-container${editTrip ? ' editing' : ''}`}>
       <MapContainer
         bounds={DEFAULT_BOUNDS}
         style={{ position: 'absolute', inset: 0 }}
@@ -407,8 +491,9 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
           activeTrip={activeTrip}
           bounds={tripData[activeTrip?.id]?.bounds}
           listOpen={listOpen}
+          editing={editing}
         />
-        <MapEvents onDeselect={onDeselect} onZoom={setZoom} />
+        <MapEvents onMapClick={handleMapClick} onZoom={setZoom} />
         <SmoothWheel />
         <ZoomButtons />
 
@@ -460,10 +545,11 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
 
         {/* Stop markers */}
         {trips.map(trip => {
+          if (trip.id === editTrip?.id) return null // drawn editable below
           const isActive = trip.id === activeTrip?.id
           const opacity  = isActive ? 0.95 : activeTrip ? 0.12 : 0.5
           const icon     = stopIcon(tripColor(trip.id), stopSize(zoom, isActive), opacity)
-          const stops    = tripData[trip.id]?.stops
+          const stops    = stopsOf(trip.id)
           // Nothing to place a marker at: no stops loaded and no fallback
           // coordinate. `position={undefined}` would throw inside Leaflet and
           // take the whole map down with it.
@@ -471,7 +557,7 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
           const coords   = stops?.length ? stops : [{ pos: trip.destCoords, name: null }]
           return coords.map((s, i) => (
             <Marker
-              key={`stop-${trip.id}-${i}`}
+              key={s.key ?? `stop-${trip.id}-${i}`}
               position={s.pos}
               icon={icon}
               // no `alt`: Leaflet only applies that to <img> icons, and these
@@ -486,6 +572,38 @@ export default function MapView({ trips, activeTrip, hoveredTrip, mapStyle, show
             </Marker>
           ))
         })}
+
+        {/* Editable stops of the selected trip: drag to move, click for the
+            rename/delete popup. Plain handlers are fine here — it's one
+            trip's worth of markers, not all ~425. */}
+        {editTrip && editStops.map(s => (
+          <Marker
+            key={s.key}
+            position={s.pos}
+            icon={stopIcon(tripColor(editTrip.id), stopSize(zoom, true) + 4, 1, true)}
+            draggable
+            keyboard={false}
+            eventHandlers={{
+              // the popup shows the name already; the tooltip would sit under it
+              popupopen: e => e.target.closeTooltip(),
+              dragend: e => {
+                const { lat, lng } = e.target.getLatLng()
+                patchStop(s.key, { pos: [lat, lng] })
+              },
+            }}
+          >
+            <Tooltip className="stop-tip" direction="top" offset={[0, -8]} opacity={1}>
+              {s.name || editTrip.name}
+            </Tooltip>
+            <Popup className="stop-popup" closeButton={false} offset={[0, -4]}>
+              <StopForm
+                stop={s}
+                onRename={name => patchStop(s.key, { name })}
+                onDelete={() => updateStops(editStops.filter(x => x.key !== s.key))}
+              />
+            </Popup>
+          </Marker>
+        ))}
 
         {/* Home marker */}
         <Marker position={HOME.coords} icon={homeIcon} title={`Home · ${HOME.label}`} alt="Home" keyboard={false} />

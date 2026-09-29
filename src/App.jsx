@@ -2,6 +2,8 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import Sidebar from './components/Sidebar'
 import MapView from './components/MapView'
 import DetailBar from './components/DetailBar'
+import EditBar from './components/EditBar'
+import { useStopEditor } from './edit/useStopEditor'
 import { trips } from './data/trips'
 import { MAP_STYLES } from './data/mapStyles'
 
@@ -22,6 +24,14 @@ const ICON_VISITED = (
   </svg>
 )
 
+// Pencil — edit mode (only shown when an edit backend answers)
+const ICON_EDIT = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M10.5 2.5l3 3L6 13H3v-3l7.5-7.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    <path d="M9 4l3 3" stroke="currentColor" strokeWidth="1.3" />
+  </svg>
+)
+
 const MOBILE_QUERY = '(max-width: 720px)'
 
 export default function App() {
@@ -34,6 +44,7 @@ export default function App() {
   const [showVisited, setShowVisited] = useState(false)
   const styleMenuRef = useRef(null)
   const appRef = useRef(null)
+  const editor = useStopEditor(trips)
 
   useEffect(() => {
     document.documentElement.classList.toggle('light', mapStyle.theme === 'light')
@@ -46,6 +57,9 @@ export default function App() {
       // while someone is typing in the search box.
       if (styleMenuOpen) { setStyleMenuOpen(false); return }
       if (e.target instanceof HTMLInputElement) return
+      // Leaflet closes an open stop popup on Escape itself; don't also
+      // drop the trip being edited
+      if (document.querySelector('.leaflet-popup')) return
       handleDeselect()
     }
     window.addEventListener('keydown', onKey)
@@ -101,6 +115,12 @@ export default function App() {
     setHoveredTrip(null)
   }
 
+  function finishEditing() {
+    if (editor.dirty && !window.confirm(`Discard ${editor.changeCount} unsaved change${editor.changeCount === 1 ? '' : 's'}?`)) return
+    editor.discard()
+    editor.setEditing(false)
+  }
+
   function toggleList() {
     listPref.current = !listOpen
     setListOpen(!listOpen)
@@ -147,7 +167,21 @@ export default function App() {
         >
           {ICON_VISITED}
         </button>
+
+        {editor.available && (
+          <button
+            className={`edit-toggle${editor.editing ? ' active' : ''}`}
+            onClick={() => (editor.editing ? finishEditing() : editor.setEditing(true))}
+            aria-pressed={editor.editing}
+            aria-label="Edit stops"
+            title="Edit stops"
+          >
+            {ICON_EDIT}
+          </button>
+        )}
       </div>
+
+      {editor.editing && <EditBar editor={editor} activeTrip={activeTrip} onDone={finishEditing} />}
 
       <button
         className="mobile-list-toggle"
@@ -165,6 +199,9 @@ export default function App() {
         listOpen={listOpen}
         onSelect={handleSelect}
         onDeselect={handleDeselect}
+        editing={editor.editing}
+        stopOverrides={editor.overrides}
+        onStopsChange={editor.change}
       />
 
       <Sidebar

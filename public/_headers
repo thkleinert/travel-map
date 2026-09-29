@@ -14,8 +14,9 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# Route geometry only changes when a trip is added or re-imported. A day of
-# caching plus background revalidation keeps repeat visits cheap without
-# pinning a stale track for a year.
+# The app requests route files as /<trip>.geojson?v=<content hash> (see
+# virtual:route-versions in vite.config.js), so a changed file always gets a
+# new URL and each URL's content never changes. index.html, which carries the
+# hashes, is no-cache above.
 /*.geojson
-  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Cache-Control: public, max-age=31536000, immutable
